@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What is Loop Engineering? — a walkthrough</title>
+<style>
+:root {
+  --ground: #0D1512;
+  --panel: #152019;
+  --panel-2: #1C2B22;
+  --line: #2E4038;
+  --text: #E8EEE9;
+  --muted: #82A093;
+  --coral: #FF7A45;
+  --mint: #4FD9A8;
+  --bad: #F2545B;
+  --mono: "IBM Plex Mono", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", Consolas, monospace;
+  --sans: "IBM Plex Sans", "Source Sans 3", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--ground); color: var(--text); font-family: var(--sans); overflow: hidden; }
+#stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(1100px 700px at 82% -10%, rgba(79,217,168,.06), transparent 60%); }
+.slide {
+  width: 960px; height: 540px; padding: 52px 64px 60px;
+  display: none; flex-direction: column; position: absolute;
+  transform: scale(var(--scale, 1)); background: var(--ground);
+}
+.slide.active { display: flex; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--coral); margin-bottom: 10px; }
+h1 { font-family: var(--mono); font-weight: 700; font-size: 46px; line-height: 1.1; letter-spacing: -.01em; text-wrap: balance; }
+h2 { font-family: var(--mono); font-weight: 700; font-size: 28px; line-height: 1.18; letter-spacing: -.005em; text-wrap: balance; margin-bottom: 18px; }
+p, li { font-size: 16.5px; line-height: 1.52; }
+.lede { font-size: 19px; color: var(--muted); max-width: 44ch; }
+ul.points { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+ul.points li { padding-left: 20px; position: relative; max-width: 64ch; }
+ul.points li::before { content: ""; position: absolute; left: 0; top: .58em; width: 8px; height: 2px; background: var(--coral); }
+strong { color: var(--coral); font-weight: 600; }
+em { font-style: italic; color: var(--mint); }
+.cols { display: flex; gap: 36px; flex: 1; min-height: 0; align-items: stretch; }
+.col { flex: 1; min-width: 0; }
+.col.narrow { flex: 0 0 340px; }
+.diagram { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.diagram svg { max-width: 100%; max-height: 100%; }
+svg text { font-family: var(--mono); fill: var(--text); }
+svg .lbl { font-size: 12.5px; }
+svg .sm { font-size: 10.5px; fill: var(--muted); }
+svg .acc { fill: var(--coral); }
+svg .mt { fill: var(--mint); }
+svg .box { fill: var(--panel); stroke: var(--line); rx: 6; }
+svg .boxc { fill: var(--panel-2); stroke: var(--coral); rx: 6; }
+svg .boxm { fill: var(--panel-2); stroke: var(--mint); rx: 6; }
+svg .wire { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+svg .wirec { stroke: var(--coral); stroke-width: 1.6; fill: none; }
+svg .wirem { stroke: var(--mint); stroke-width: 1.6; fill: none; }
+svg .wireb { stroke: var(--bad); stroke-width: 1.6; fill: none; }
+.demo-chip { margin-top: auto; align-self: flex-start; font-family: var(--mono); font-size: 13px;
+  background: var(--panel-2); border: 1px solid var(--coral); border-radius: 4px; padding: 8px 14px; color: var(--coral); }
+.demo-chip::before { content: "▶ live demo  "; color: var(--muted); }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; font-size: 15px; }
+.kv dt { font-family: var(--mono); color: var(--mint); font-size: 13px; padding-top: 2px; }
+.kv dd { color: var(--text); max-width: 54ch; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+  text-align: left; padding: 6px 14px 6px 0; border-bottom: 1px solid var(--line); }
+td { padding: 7px 14px 7px 0; border-bottom: 1px solid rgba(46,64,56,.5); vertical-align: top; }
+td.mono, .mono { font-family: var(--mono); font-size: 13px; }
+td.mono { color: var(--mint); white-space: nowrap; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.foot { position: absolute; left: 64px; right: 64px; bottom: 22px; display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .07em; }
+aside.notes { display: none; }
+#notes { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: rgba(13,21,18,.97);
+  border-top: 2px solid var(--coral); padding: 18px 48px 22px; max-height: 38vh; overflow-y: auto;
+  font-family: var(--sans); font-size: 15px; line-height: 1.55; color: var(--text); display: none; }
+#notes.open { display: block; }
+#notes .tag { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; color: var(--coral); text-transform: uppercase; display: block; margin-bottom: 8px; }
+#notes p + p { margin-top: 8px; }
+#overview { position: fixed; inset: 0; z-index: 40; background: rgba(13,21,18,.98); display: none; overflow-y: auto; padding: 48px; }
+#overview.open { display: block; }
+#overview .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+#overview .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; cursor: pointer; font-family: var(--sans); }
+#overview .card:hover, #overview .card:focus { border-color: var(--coral); outline: none; }
+#overview .card .n { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+#overview .card .e { font-family: var(--mono); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; color: var(--coral); margin: 6px 0 4px; }
+#overview .card .t { font-size: 15px; font-weight: 600; line-height: 1.25; }
+#hud { position: fixed; right: 20px; bottom: 14px; z-index: 20; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+#bar { position: fixed; left: 0; bottom: 0; height: 3px; background: var(--coral); z-index: 25; transition: width .2s ease; }
+#help { position: fixed; left: 20px; bottom: 14px; z-index: 20; font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; }
+.title-slide { justify-content: center; }
+.byline { margin-top: 24px; font-family: var(--mono); font-size: 13px; color: var(--muted); line-height: 1.8; }
+.byline b { color: var(--mint); font-weight: 500; }
+.byline a { color: var(--coral); font-weight: 500; text-decoration: none; border-bottom: 1px solid rgba(255,122,69,.4); }
+.byline a:hover { border-bottom-color: var(--coral); }
+blockquote { border-left: 3px solid var(--mint); padding: 4px 0 4px 20px; font-size: 18px; line-height: 1.5; font-style: italic; max-width: 60ch; color: var(--text); }
+blockquote footer { font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 10px; }
+.codebox { font-family: var(--mono); font-size: 13px; line-height: 1.6; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 14px 18px; overflow-x: auto; white-space: pre; }
+.codebox .c { color: var(--muted); }
+.codebox .a { color: var(--coral); }
+.codebox .g { color: var(--mint); }
+.loop-glyph { display: block; margin: 0 auto; }
+@keyframes spin-loop { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -220; } }
+.loop-glyph .arc { stroke-dasharray: 8 6; animation: spin-loop 6s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .loop-glyph .arc { animation: none; } #bar { transition: none; } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <marker id="ar-m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#82A093"/></marker>
+    <marker id="ar-c" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#FF7A45"/></marker>
+    <marker id="ar-mt" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#4FD9A8"/></marker>
+    <marker id="ar-b" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#F2545B"/></marker>
+  </defs>
+</svg>
+
+<div id="stage">
+
+<!-- 1 · TITLE -->
+<section class="slide title-slide" data-eyebrow="the pragmatic engineer · july 2026">
+  <div class="eyebrow">A walkthrough of Gergely Orosz's article · The Pragmatic Engineer · July 2026</div>
+  <svg class="loop-glyph" width="72" height="72" viewBox="0 0 72 72" style="margin-bottom:14px">
+    <circle class="arc" cx="36" cy="36" r="28" fill="none" stroke="#4FD9A8" stroke-width="3"/>
+    <path d="M36,8 L44,16 L36,16 Z" fill="#4FD9A8"/>
+  </svg>
+  <h1 style="text-align:center">What is<br>"Loop Engineering"?</h1>
+  <p class="lede" style="margin-top:18px; text-align:center; max-width:60ch; align-self:center">My job is to write loops. <em>Not</em> prompts.</p>
+  <div class="byline" style="text-align:center; align-self:center">source: <b>newsletter.pragmaticengineer.com/p/what-is-loop-engineering</b><br>code + slides: <a href="https://github.com/d48/loop-engineering-demo" target="_blank" rel="noopener">github.com/d48/loop-engineering-demo</a><br>clone it: <b>git clone https://github.com/d48/loop-engineering-demo</b> — four live demos, zero dependencies</div>
+  <aside class="notes">
+    <p>Framing: this article isn't about prompt-crafting tricks — it's about a shift already visible in how the best engineers use coding agents: instead of typing prompts by hand, they write the *loop* that keeps prompting the agent for them.</p>
+    <p>Point people at the repo now if you want them following along live: github.com/d48/loop-engineering-demo — stdlib-only Python, no API keys needed for any of the four demos.</p>
+  </aside>
+</section>
+
+<!-- 2 · DEFINITION -->
+<section class="slide" data-eyebrow="definition">
+  <div class="eyebrow">Definition</div>
+  <h2>Loop engineering: designing the system that prompts the agent</h2>
+  <div class="cols">
+    <div class="col">
+      <blockquote>"I don't prompt Claude anymore. I have loops running that prompt Claude and figuring out what to do. My job is to write loops."
+        <footer>— Boris Cherny, Anthropic (creator of Claude Code)</footer>
+      </blockquote>
+      <ul class="points" style="margin-top:20px">
+        <li>Also promoted by <strong>Peter Steinberger</strong> (OpenClaw) and <strong>Addy Osmani</strong> (formerly Google).</li>
+        <li>The core move: <em>replacing yourself</em> as the person who prompts the agent, with a system that does it on your behalf.</li>
+      </ul>
+    </div>
+    <div class="col narrow">
+      <div class="codebox">manual prompting:
+  you -> prompt -> agent -> result
+  <span class="c">(repeat by hand, forever)</span>
+
+<span class="a">loop engineering:</span>
+  you -> <span class="g">loop</span> -> agent -> result
+              <span class="c">^ runs itself</span></div>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>Cherny's quote is the cleanest one-line definition in the piece. The shift he's describing: engineering effort moves from crafting individual prompts to designing the *system* that decides what to prompt next, when to stop, and how to recover.</p>
+    <p>This is the article's thesis in miniature — everything that follows (Ralph, /goal, triggers, cron) is a specific shape that "the loop" takes.</p>
+  </aside>
+</section>
+
+<!-- 3 · RALPH ORIGIN -->
+<section class="slide" data-eyebrow="origin">
+  <div class="eyebrow">Where it began</div>
+  <h2>The "Ralph Wiggum" loop <span style="color:var(--muted); font-weight:400">— Geoffrey Huntley, mid-2025</span></h2>
+  <div class="codebox" style="font-size:20px; text-align:center; padding:24px">while :; do cat PROMPT.md | claude-code ; done</div>
+  <div class="cols" style="margin-top:20px">
+    <div class="col">
+      <ul class="points">
+        <li>Named after the naive Simpsons character who keeps <em>offering to help</em> — an agent that just keeps trying, restarted fresh each time.</li>
+        <li>Rationale: mid-2025 context windows topped out around <strong>~200,000 tokens</strong> — breaking a big task into many small fresh runs worked around that ceiling.</li>
+      </ul>
+    </div>
+    <div class="col narrow">
+      <blockquote style="font-size:15.5px">"Engineers are still needed. There is no way this is possible without senior expertise guiding Ralph."
+        <footer>— Geoffrey Huntley</footer>
+      </blockquote>
+    </div>
+  </div>
+  <div class="demo-chip">python3 demo/run.py 1 — a plan file survives across a dozen fresh-context ticks</div>
+  <aside class="notes">
+    <p>Huntley's original post ("Ralph Wiggum as a software engineer") is the article's cited origin point for the whole loop-engineering trend, about a year before this piece was written.</p>
+    <p>His own caveat is worth reading aloud: this is not "fire and forget" automation that replaces engineers — it still requires someone senior enough to write the plan and recognize when Ralph is going sideways.</p>
+    <p>DEMO 1 runs the exact mechanic: PLAN.md is the only thing that survives between iterations; the "model" is invoked completely fresh each tick, exactly like a new `claude-code` process reading PROMPT.md from scratch.</p>
+  </aside>
+</section>
+
+<!-- 4 · RALPH MECHANICS -->
+<section class="slide" data-eyebrow="mechanics">
+  <div class="eyebrow">How the Ralph loop actually works</div>
+  <h2>Fresh context every tick; the plan file is the only memory</h2>
+  <div class="diagram">
+    <svg viewBox="0 0 820 300">
+      <circle cx="410" cy="150" r="118" fill="none" stroke="#2E4038" stroke-width="2"/>
+      <circle class="arc" cx="410" cy="150" r="118" fill="none" stroke="#4FD9A8" stroke-width="2.5" stroke-dasharray="10 8"/>
+
+      <rect x="350" y="118" width="120" height="64" class="boxc"/>
+      <text x="410" y="144" text-anchor="middle" class="lbl acc">PLAN.md</text>
+      <text x="410" y="162" text-anchor="middle" class="sm">one item checked</text>
+      <text x="410" y="176" text-anchor="middle" class="sm">off per tick</text>
+
+      <rect x="180" y="20" width="150" height="56" class="box"/>
+      <text x="255" y="46" text-anchor="middle" class="lbl">fresh agent tick</text>
+      <text x="255" y="64" text-anchor="middle" class="sm">zero conversation history</text>
+
+      <rect x="490" y="20" width="150" height="56" class="box"/>
+      <text x="565" y="46" text-anchor="middle" class="lbl">work one item</text>
+      <text x="565" y="64" text-anchor="middle" class="sm">real edit, real file</text>
+
+      <rect x="620" y="150" width="150" height="56" class="box"/>
+      <text x="695" y="176" text-anchor="middle" class="lbl">check it off</text>
+      <text x="695" y="194" text-anchor="middle" class="sm">write back to disk</text>
+
+      <rect x="490" y="234" width="150" height="56" class="box"/>
+      <text x="565" y="260" text-anchor="middle" class="lbl">spawn subagent</text>
+      <text x="565" y="278" text-anchor="middle" class="sm">if the item needs one</text>
+
+      <rect x="50" y="150" width="150" height="56" class="boxm"/>
+      <text x="125" y="176" text-anchor="middle" class="lbl mt">restart, fresh</text>
+      <text x="125" y="194" text-anchor="middle" class="sm">no memory of last tick</text>
+
+      <path class="wire" marker-end="url(#ar-m)" d="M330,55 C365,55 375,90 372,116"/>
+      <path class="wire" marker-end="url(#ar-m)" d="M490,50 C455,50 445,90 448,116"/>
+      <path class="wire" marker-end="url(#ar-m)" d="M565,80 C600,110 615,130 618,155"/>
+      <path class="wire" marker-end="url(#ar-m)" d="M620,230 C580,232 570,220 568,208"/>
+      <path class="wire" marker-end="url(#ar-m)" d="M490,262 C400,275 240,250 205,195"/>
+      <path class="wirem" marker-end="url(#ar-mt)" d="M125,150 C160,90 190,65 200,60"/>
+      <text x="410" y="30" text-anchor="middle" class="sm">goal check: all items done AND real test suite green -&gt; stop</text>
+    </svg>
+  </div>
+  <aside class="notes">
+    <p>The circular motif here is deliberate: unlike a linear pipeline, the Ralph loop has no "next step" in the conventional sense — it's the same five moves, repeated, with the plan file as the one piece of state that survives the restart.</p>
+    <p>Subagents get spawned only when a plan item is big enough to warrant delegation — the article notes this keeps runs from blowing the context budget on any single tick.</p>
+  </aside>
+</section>
+
+<!-- 5 · POCOCK EVOLUTION -->
+<section class="slide" data-eyebrow="evolution">
+  <div class="eyebrow">The loop matures</div>
+  <h2>"Ship working code while you sleep" — Matt Pocock's dynamic Kanban</h2>
+  <div class="cols">
+    <div class="col">
+      <ul class="points">
+        <li>Late 2025: better models made the Ralph loop reliable enough to run <strong>unattended overnight</strong>.</li>
+        <li>Pocock's version keeps a master PRD as a live backlog — a "dynamic Kanban" the loop works through on its own.</li>
+      </ul>
+    </div>
+    <div class="col narrow">
+      <div class="codebox">agent prompt, each tick:
+<span class="a">1.</span> pick next feature (priority)
+<span class="a">2.</span> pnpm test <span class="c"># must pass</span>
+<span class="a">3.</span> update master tracker
+<span class="a">4.</span> log to progress.txt
+<span class="a">5.</span> git commit</div>
+    </div>
+  </div>
+  <p style="margin-top:20px; color:var(--muted); font-size:15px">Same five-step shape as the Ralph loop's own cycle — pick, work, verify, record, restart — just with a real test runner and version control standing in as the goal check.</p>
+  <aside class="notes">
+    <p>This is the article's bridge between "Ralph as a hacker's trick" and "Ralph as production practice." Pocock's contribution was operational discipline: a real backlog, a real test gate (pnpm test), and a real commit per completed item — nothing conceptually new over Huntley's loop, but proof it scales to real overnight work.</p>
+  </aside>
+</section>
+
+<!-- 6 · GOAL TIMELINE -->
+<section class="slide" data-eyebrow="timeline">
+  <div class="eyebrow">The loop becomes a first-class feature</div>
+  <h2>/goal ships across every major harness within six months</h2>
+  <div class="diagram" style="flex:0 0 auto; margin-bottom:10px">
+    <svg viewBox="0 0 860 150">
+      <line x1="40" y1="90" x2="820" y2="90" stroke="#2E4038" stroke-width="2"/>
+      <g class="lbl">
+        <circle cx="120" cy="90" r="6" fill="#FF7A45"/>
+        <text x="120" y="70" text-anchor="middle" class="sm acc">April</text>
+        <text x="120" y="115" text-anchor="middle" class="sm">OpenAI Codex</text>
+        <text x="120" y="130" text-anchor="middle" class="sm">ships "Goals"</text>
+
+        <circle cx="360" cy="90" r="6" fill="#4FD9A8"/>
+        <text x="360" y="70" text-anchor="middle" class="sm mt">May 2</text>
+        <text x="360" y="115" text-anchor="middle" class="sm">Hermes Agent</text>
+        <text x="360" y="130" text-anchor="middle" class="sm">ships /goal</text>
+
+        <circle cx="580" cy="90" r="6" fill="#4FD9A8"/>
+        <text x="580" y="70" text-anchor="middle" class="sm mt">May 12</text>
+        <text x="580" y="115" text-anchor="middle" class="sm">Claude Code</text>
+        <text x="580" y="130" text-anchor="middle" class="sm">ships /goal</text>
+
+        <circle cx="770" cy="90" r="6" fill="#82A093"/>
+        <text x="770" y="70" text-anchor="middle" class="sm">since</text>
+        <text x="770" y="115" text-anchor="middle" class="sm">OpenCode, Pi</text>
+        <text x="770" y="130" text-anchor="middle" class="sm">/goal plugins</text>
+      </g>
+    </svg>
+  </div>
+  <ul class="points">
+    <li>By May, running a Ralph-style loop needed <strong>one command</strong> in a mainstream harness — no more hand-rolled while-loops.</li>
+    <li>Claude Code's /goal: a small, fast model checks the completion condition after every turn and auto-clears the goal once it's met. An earlier March feature, <strong>/loop</strong>, already handled scheduling agents at intervals.</li>
+  </ul>
+  <aside class="notes">
+    <p>Six months from "one engineer's shell one-liner" to "a first-class command in every mainstream coding agent" — that speed is itself part of the article's point about how fast this category moved.</p>
+    <p>Claude Code's architecture is worth spelling out: the completion check runs on a *separate*, cheaper/faster model than the one doing the work — cheap verification on every turn, not just at the end.</p>
+  </aside>
+</section>
+
+<!-- 7 · GOAL VS PROMPT -->
+<section class="slide" data-eyebrow="the core distinction">
+  <div class="eyebrow">Goal vs. prompt</div>
+  <h2>"Do this next thing" vs. "keep working until this is true"</h2>
+  <div class="cols">
+    <div class="col">
+      <div class="codebox"><span class="a">PROMPT</span>
+  "make checkout faster"
+  <span class="c">-&gt; one edit, ships, done</span>
+  <span class="c">-&gt; nobody re-checks it</span>
+
+<span class="g">GOAL</span>
+  "reduce p95 checkout latency
+   below 120ms on the checkout
+   benchmark while keeping the
+   correctness suite green"
+  <span class="c">-&gt; loops with a real check</span>
+  <span class="c">-&gt; stops only when both hold</span></div>
+    </div>
+    <div class="col narrow">
+      <p style="font-size:15px; color:var(--muted)">This exact wording is Codex's own published example for its Goals feature — not a hypothetical.</p>
+    </div>
+  </div>
+  <div class="demo-chip">python3 demo/run.py 2 — same benchmark, prompt mode ships a broken "fix"; goal mode doesn't stop until it's real</div>
+  <aside class="notes">
+    <p>This is the single clearest technical definition in the whole article. A prompt is really just a goal with a budget of one tick and no verification step — that reframing is the key insight for engineers in the audience.</p>
+    <p>DEMO 2 makes the risk concrete: prompt mode takes the obvious shortcut (skip a lookup, "simplify" the tax math while it's in there) and ships it unverified — it hits the latency target but silently breaks correctness. Goal mode iterates, checking real p95 latency AND a real correctness suite after every tick, and only stops once both are genuinely true.</p>
+  </aside>
+</section>
+
+<!-- 8 · CODEX ARCHITECTURE -->
+<section class="slide" data-eyebrow="architecture">
+  <div class="eyebrow">What a goal needs to actually work</div>
+  <h2>Codex Goals: files, logs, tests, lifecycle, budget</h2>
+  <div class="diagram">
+    <svg viewBox="0 0 860 254">
+      <rect x="330" y="90" width="200" height="70" class="boxc"/>
+      <text x="430" y="120" text-anchor="middle" class="lbl acc">the goal</text>
+      <text x="430" y="140" text-anchor="middle" class="sm">completion condition</text>
+
+      <rect x="40" y="20" width="170" height="56" class="box"/>
+      <text x="125" y="46" text-anchor="middle" class="lbl">files &amp; logs</text>
+      <text x="125" y="64" text-anchor="middle" class="sm">durable state across turns</text>
+
+      <rect x="650" y="20" width="170" height="56" class="box"/>
+      <text x="735" y="46" text-anchor="middle" class="lbl">running tests</text>
+      <text x="735" y="64" text-anchor="middle" class="sm">the actual completion check</text>
+
+      <rect x="40" y="164" width="170" height="56" class="box"/>
+      <text x="125" y="190" text-anchor="middle" class="lbl">lifecycle controls</text>
+      <text x="125" y="208" text-anchor="middle" class="sm">pause, resume, cancel</text>
+
+      <rect x="650" y="164" width="170" height="56" class="box"/>
+      <text x="735" y="190" text-anchor="middle" class="lbl">budget constraints</text>
+      <text x="735" y="208" text-anchor="middle" class="sm">bounded ticks / spend</text>
+
+      <path class="wire" marker-end="url(#ar-m)" d="M210,48 C270,60 320,80 350,100"/>
+      <path class="wire" marker-end="url(#ar-m)" d="M650,48 C590,60 540,80 510,100"/>
+      <path class="wire" marker-end="url(#ar-m)" d="M210,192 C270,178 320,155 350,140"/>
+      <path class="wire" marker-end="url(#ar-m)" d="M650,192 C590,178 540,155 510,140"/>
+      <text x="430" y="242" text-anchor="middle" class="sm">also coordinates multiple agents against one goal without stepping on each other</text>
+    </svg>
+  </div>
+  <aside class="notes">
+    <p>The article frames this as the "harness" work behind a seemingly simple feature: /goal isn't just a completion-check prompt bolted onto the model — it needs real durable state, a real test runner it can call, controls a human can use to intervene, and a hard budget so a stuck loop doesn't run (and spend) forever.</p>
+  </aside>
+</section>
+
+<!-- 9 · TRIGGERS AND CRON -->
+<section class="slide" data-eyebrow="what developers actually use">
+  <div class="eyebrow">The two shapes almost everyone reaches for</div>
+  <h2>Triggers and cron jobs <span style="color:var(--muted); font-weight:400">(~210 developer survey responses)</span></h2>
+  <div class="cols">
+    <div class="col">
+      <p class="eyebrow" style="color:var(--mint)">triggers</p>
+      <ul class="points">
+        <li>Agent wakes on an <strong>event</strong>: an error logged, a ticket filed, a piece of customer feedback.</li>
+        <li>Pre-AI parallel: a webhook firing a Slack bot, or a Zapier/n8n automation.</li>
+      </ul>
+    </div>
+    <div class="col">
+      <p class="eyebrow" style="color:var(--mint)">cron jobs</p>
+      <ul class="points">
+        <li>Agent wakes on a <strong>schedule</strong> — nightly, hourly, every 30 minutes.</li>
+        <li>Functionally identical to a traditional cron job; only the payload changed.</li>
+      </ul>
+    </div>
+  </div>
+  <blockquote style="margin-top:8px">"Strategic workflows that are repeatable and automatable can be done so with an agent."
+    <footer>— Oded Messer, director of engineering</footer>
+  </blockquote>
+  <div class="demo-chip">python3 demo/run.py 3 — real error events, deduped into PRs, with a stuck-PR notification</div>
+  <aside class="notes">
+    <p>The article is candid about the critique here too: some engineers see "loop engineering" as a rebrand of automation that predates LLMs by a decade. What's actually new is the payload each trigger fires — a whole reasoning agent instead of a fixed script — not the trigger mechanism itself.</p>
+    <p>DEMO 3 mirrors Ivan Pantić's PR-from-Sentry-errors workflow directly: real events land in an inbox, get deduped by signature so three occurrences of one bug become one PR (not three), and a stuck PR triggers a real notification after enough ticks with no review.</p>
+  </aside>
+</section>
+
+<!-- 10 · CASE STUDIES 1 -->
+<section class="slide" data-eyebrow="case studies">
+  <div class="eyebrow">Helpful loops, part 1 — development work</div>
+  <h2>What triggered loops look like in practice</h2>
+  <table>
+    <tr><th>engineer</th><th>trigger</th><th>what the loop does</th></tr>
+    <tr><td class="mono">Ivan Pantić</td><td>Sentry issue detected</td><td>opens a PR if none exists yet; pings Slack if the PR stalls in review</td></tr>
+    <tr><td class="mono">Paul D'Ambra</td><td>/loop, on demand</td><td>pulls the next flaky test, verifies it's really flaky, fixes it — <span class="num">13</span> stabilizing PRs so far</td></tr>
+    <tr><td class="mono">Ivan Abad</td><td>alert / exception</td><td>investigates; implements + PRs + pings for review if a code change is needed</td></tr>
+    <tr><td class="mono">Artem Nikitin</td><td>new design doc</td><td>iteratively reviews a plan across multiple passes until zero new major issues surface</td></tr>
+  </table>
+  <div class="demo-chip">python3 demo/run.py 4 — real flaky tests, measured, fixed, and reconfirmed at 0% failure</div>
+  <aside class="notes">
+    <p>These four are named, on-the-record engineers from the article's own reporting, not hypothetical composites.</p>
+    <p>DEMO 4 runs Paul D'Ambra's exact workflow for real: a genuine race condition (real threads, no lock) and a genuinely over-tight timing deadline. The loop measures each one's actual failure rate across dozens of fresh runs, applies a real fix, and reconfirms 0% before moving to the next test — the same "verify flakiness, then fix" discipline, just at demo scale (2 tests fixed, not 13).</p>
+  </aside>
+</section>
+
+<!-- 11 · CASE STUDIES 2 -->
+<section class="slide" data-eyebrow="case studies">
+  <div class="eyebrow">Helpful loops, part 2 — nightly and cron-scheduled work</div>
+  <h2>What runs while nobody's watching</h2>
+  <table>
+    <tr><th>engineer</th><th>cadence</th><th>what the loop does</th></tr>
+    <tr><td class="mono">Jack D</td><td>nightly</td><td>reads 24h of logs + user feedback, opens improvement PRs for human review</td></tr>
+    <tr><td class="mono">Utku K</td><td>nightly</td><td>investigates failed e2e tests, tells real regressions from flakes, auto-fixes and reruns until pass or retry cap, escalates by morning</td></tr>
+    <tr><td class="mono">Lawrence Jones</td><td>on demand</td><td>builds telemetry integrations, iterating on query plans until output is verified correct</td></tr>
+    <tr><td class="mono">Rafel Mendiola</td><td>every 30 min</td><td>React → React Native migration, one small task per tick — <span class="num">50–100</span> tickets' worth of manual epic management, automated</td></tr>
+  </table>
+  <aside class="notes">
+    <p>Rafel Mendiola's case is the clearest "budget constraint" story in the article's practitioner examples: instead of one person grinding through 50-100 Jira tickets by hand, a loop ticks every 30 minutes and chips away at the migration on its own schedule.</p>
+    <p>Notice all eight case studies (this slide + the last) reduce to the same LoopRunner shape from the demos: real trigger source, real predicate, real budget — only the payload changes.</p>
+  </aside>
+</section>
+
+<!-- 12 · HONEST GAPS -->
+<section class="slide" data-eyebrow="the honest part">
+  <div class="eyebrow">What the article says about the downsides <span style="color:var(--bad); font-weight:400">(partially paywalled)</span></div>
+  <h2>Disappointment, "tokenmaxxing," and a live open question</h2>
+  <div class="cols">
+    <div class="col">
+      <ul class="points">
+        <li>Some developers try looping, hit <strong>agent drift</strong>, and go back to a human in the loop — plainly better results for them.</li>
+        <li><strong>"Tokenmaxxing"</strong>: token-hungry loops running up real API cost with no guardrail.</li>
+      </ul>
+    </div>
+    <div class="col">
+      <ul class="points">
+        <li>Max Kanat-Alexander's hypothesis: loops may be a <em>temporary infrastructure hack</em>, not a durable abstraction.</li>
+        <li>Open question the article poses directly: does <strong>context engineering</strong> end up mattering more than loop specialization?</li>
+      </ul>
+    </div>
+  </div>
+  <p style="margin-top:18px; font-size:14.5px; color:var(--muted)">Full discussion of this section sits behind The Pragmatic Engineer's paywall — summarized here from what's publicly visible, not fabricated.</p>
+  <aside class="notes">
+    <p>Be upfront with the audience here exactly like the deck is: the source article gates its "challenges and criticisms" section behind a paywall, so this slide reflects only what's visible in the free preview plus the article's own section headers — it is not a complete accounting of the counterarguments.</p>
+    <p>Kanat-Alexander's framing is worth dwelling on for an engineering audience: every abstraction in this space (Ralph's plan file, /goal's completion check) might get absorbed into the model itself over time, the way prompt-engineering tricks got partly absorbed by instruction tuning.</p>
+  </aside>
+</section>
+
+<!-- 13 · TAKEAWAYS -->
+<section class="slide" data-eyebrow="takeaways">
+  <div class="eyebrow">Takeaways for working engineers</div>
+  <h2>What to steal for your own loops</h2>
+  <ul class="points" style="font-size:16px; gap:9px">
+    <li><strong>A prompt is a loop with a budget of one and no verification.</strong> Naming that distinction changes how you design agent-driven automation.</li>
+    <li><strong>Persistent state beats conversation memory.</strong> A plan file that survives a fresh restart is more robust than a long-lived context window.</li>
+    <li><strong>Never trust a claimed outcome — compute it.</strong> Every real loop in this deck ends with an independent, re-run check, not a stated one.</li>
+    <li><strong>Budgets are a feature, not a limitation.</strong> A goal that can fail honestly within N ticks is safer than one that runs forever.</li>
+    <li><strong>Triggers and cron aren't new — the payload is.</strong> The mechanism is decades old; what changed is what runs when it fires.</li>
+  </ul>
+  <div class="byline" style="margin-top:10px; line-height:1.4">article: <b>newsletter.pragmaticengineer.com/p/what-is-loop-engineering</b> · code: <a href="https://github.com/d48/loop-engineering-demo" target="_blank" rel="noopener">github.com/d48/loop-engineering-demo</a></div>
+  <aside class="notes">
+    <p>Close by connecting to the room: everyone here has probably already half-built one of these loops — a nightly job, a webhook handler, a retry-until-pass CI step. This article just gives the pattern a name and a clean vocabulary (goal vs. prompt) for talking about it.</p>
+    <p>Q&amp;A seeds: where would a real budget constraint live in our own agent automations? What's our equivalent of a persistent plan file? Which of our "prompts" are secretly goals we've never verified?</p>
+  </aside>
+</section>
+
+</div>
+
+<div id="notes"><span class="tag">speaker notes — N to hide</span><div id="notes-body"></div></div>
+<div id="overview"><div class="grid" id="overview-grid"></div></div>
+<div id="bar"></div>
+<div id="hud"></div>
+<div id="help">← → navigate · N notes · O overview</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+  var hud = document.getElementById("hud");
+  var bar = document.getElementById("bar");
+  var notes = document.getElementById("notes");
+  var notesBody = document.getElementById("notes-body");
+  var overview = document.getElementById("overview");
+  var grid = document.getElementById("overview-grid");
+  var current = 0;
+
+  slides.forEach(function (slide, i) {
+    var foot = document.createElement("div");
+    foot.className = "foot";
+    foot.innerHTML = "<span>loop engineering — gergely orosz · jul 2026</span><span>" +
+      (i + 1) + " / " + slides.length + "</span>";
+    slide.appendChild(foot);
+
+    var card = document.createElement("div");
+    card.className = "card";
+    card.tabIndex = 0;
+    var title = slide.querySelector("h1, h2");
+    card.innerHTML = '<div class="n">' + String(i + 1).padStart(2, "0") + '</div>' +
+      '<div class="e">' + (slide.dataset.eyebrow || "") + '</div>' +
+      '<div class="t">' + (title ? title.textContent : "") + '</div>';
+    card.addEventListener("click", function () { toggleOverview(false); show(i); });
+    card.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { toggleOverview(false); show(i); }
+    });
+    grid.appendChild(card);
+  });
+
+  function show(i) {
+    current = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function (s, j) { s.classList.toggle("active", j === current); });
+    hud.textContent = (current + 1) + " / " + slides.length;
+    bar.style.width = (100 * (current + 1) / slides.length) + "%";
+    var aside = slides[current].querySelector("aside.notes");
+    notesBody.innerHTML = aside ? aside.innerHTML : "<p>(no notes)</p>";
+    location.hash = "#/" + (current + 1);
+  }
+
+  function toggleNotes() { notes.classList.toggle("open"); }
+  function toggleOverview(force) {
+    var open = typeof force === "boolean" ? force : !overview.classList.contains("open");
+    overview.classList.toggle("open", open);
+  }
+
+  function fit() {
+    var scale = Math.min(window.innerWidth / 990, window.innerHeight / 580);
+    slides.forEach(function (s) { s.style.setProperty("--scale", Math.min(scale, 1.6)); });
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); show(current + 1); }
+    else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); show(current - 1); }
+    else if (e.key === "Home") { show(0); }
+    else if (e.key === "End") { show(slides.length - 1); }
+    else if (e.key === "n" || e.key === "N") { toggleNotes(); }
+    else if (e.key === "o" || e.key === "O") { toggleOverview(); }
+    else if (e.key === "Escape") { toggleOverview(false); }
+  });
+  document.getElementById("stage").addEventListener("click", function (e) {
+    if (window.getSelection().toString()) return;
+    show(current + (e.clientX > window.innerWidth / 2 ? 1 : -1));
+  });
+  window.addEventListener("resize", fit);
+
+  fit();
+  var start = parseInt((location.hash.match(/#\/(\d+)/) || [])[1], 10);
+  show(isNaN(start) ? 0 : start - 1);
+})();
+</script>
+</body>
+</html>
