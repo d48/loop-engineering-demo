@@ -92,12 +92,10 @@ SCRIPT = [
         },
     ),
     Action(
-        thought="Check it off. All plan items should now be done — verify with the real test suite.",
+        thought="Check it off. All plan items should now be done — the harness checks the real "
+                "goal predicate after every tick, so it'll catch completion the moment this lands, "
+                "whether or not I explicitly re-run the tests myself.",
         tool="edit", args={"path": "PLAN.md", "old": "- [ ] implement flatten(nested_list)", "new": "- [x] implement flatten(nested_list)"},
-    ),
-    Action(
-        thought="Run the test suite to confirm the plan is actually, verifiably complete.",
-        tool="bash", args={"cmd": "python3 test_mathstuff.py"},
     ),
 ]
 
@@ -142,7 +140,7 @@ def main() -> None:
             toolbox=toolbox,
             trace=trace,
             predicate=lambda: plan_and_tests_done(toolbox),
-            max_ticks=12,
+            max_ticks=10,
         )
         result = runner.run()
 
